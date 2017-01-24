@@ -1,0 +1,172 @@
+---
+title: "README"
+author: "Alexandre Huynen"
+date: "1/23/2017"
+output: html_document
+---
+
+# Project instruction
+
+> The purpose of this project is to demonstrate your ability to collect, work with, and clean a data set.
+>
+> #### Review criterialess
+>
+>1. The submitted data set is tidy.
+>2. The Github repo contains the required scripts.
+>3. GitHub contains a code book that modifies and updates the available codebooks with the data to indicate all the variables and summaries calculated, along with units, and any other relevant information.
+>4. The README that explains the analysis files is clear and understandable.
+>5. The work submitted for this project is the work of the student who submitted it.
+>
+>#### Getting and Cleaning Data Course Projectless 
+>The purpose of this project is to demonstrate your ability to collect, work with, and clean a data set. The goal is to prepare tidy data that can be used for later analysis. You will be graded by your peers on a series of yes/no questions related to the project. You will be required to submit: 1) a tidy data set as described below, 2) a link to a Github repository with your script for performing the analysis, and 3) a code book that describes the variables, the data, and any transformations or work that you performed to clean up the data called CodeBook.md. You should also include a README.md in the repo with your scripts. This repo explains how all of the scripts work and how they are connected.
+>
+> One of the most exciting areas in all of data science right now is wearable computing - see for example [this article](http://www.insideactivitytracking.com/data-science-activity-tracking-and-the-battle-for-the-worlds-top-sports-brand/). Companies like Fitbit, Nike, and Jawbone Up are racing to develop the most advanced algorithms to attract new users. The data linked to from the course website represent data collected from the accelerometers from the Samsung Galaxy S smartphone. A full description is available at the site where the data was obtained:
+>
+>http://archive.ics.uci.edu/ml/datasets/Human+Activity+Recognition+Using+Smartphones
+>
+>Here are the data for the project:
+>
+>https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip
+>
+>You should create one R script called run_analysis.R that does the following.
+>
+>1. Merges the training and the test sets to create one data set.
+>2. Extracts only the measurements on the mean and standard deviation for each measurement.
+>3. Uses descriptive activity names to name the activities in the data set
+>4. Appropriately labels the data set with descriptive variable names.
+>5. From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject.
+>
+>Good luck!
+
+# Code: 'run_analysis.R'
+
+## Getting started
+
+We start this script by loading the necessary packages
+
+```{r, eval=FALSE, include=TRUE}
+library(data.table)
+library(plyr)
+```
+
+We then check if the folder 'UCI HAR Dataset' is in the current directory or in 
+a subdirectory. If not, it is downloaded.
+
+```{r, eval=FALSE, include=TRUE}
+foldername <- "UCI HAR Dataset"
+listdirs <- list.dirs()
+
+if(!any(grepl(pattern = foldername, listdirs))){
+        # The folder is not in the directory or a subdirectory
+        # It is thus downloaded and unzipped
+        temp <- tempfile()
+        fileUrl <- paste("https://d396qusza40orc.cloudfront.net/",
+                         "getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip", 
+                         sep = "")
+        download.file(fileUrl, temp, method = "curl")
+        if (!file.exists("data")){ dir.create("data") }
+        unzip(temp, exdir = "./data")
+        unlink(temp)
+        # The path to the folder is stored in the variable 'datapath'
+        datapath <- file.path("./data", foldername)
+} else {
+        # The folder already exist, we extract its path and store it 
+        # in the variable 'datapath'
+        datapath <- grep(pattern = foldername, listdirs, value = TRUE)[1]
+}
+```
+
+Now, we can read the data
+
+```{r, eval=FALSE, include=TRUE}
+acti <- read.table(file.path(datapath, "activity_labels.txt"))
+feat <- read.table(file.path(datapath, "features.txt"))
+
+# Train data
+xtrain <- read.table(file.path(datapath, "train/X_train.txt"))
+ytrain <- read.table(file.path(datapath, "train/Y_train.txt"))
+subtrain <- read.table(file.path(datapath, "train/subject_train.txt"))
+
+# Test data
+xtest <- read.table(file.path(datapath, "test/X_test.txt"))
+ytest <- read.table(file.path(datapath, "test/Y_test.txt"))
+subtest <- read.table(file.path(datapath, "test/subject_test.txt"))
+```
+
+## 1. Formatting and merging the data
+
+We use 'rbind' and 'cbind' to combine the training and testing data sets. The columns are named using the features stored in 'feat'.
+
+```{r, eval=FALSE, include=TRUE}
+xtot <- rbind(xtrain, xtest)
+names(xtot) <- feat[,2]
+```
+
+Similarly for the 'activity' and 'subject' 
+
+```{r, eval=FALSE, include=TRUE}
+ytot <- rbind(ytrain, ytest)
+names(ytot) <- "activity"
+
+subtot <- rbind(subtrain, subtest)
+names(subtot) <- "subject"
+```
+
+One last step, we combine the 'subject', 'activity', and 'features' into one variable
+
+```{r, eval=FALSE, include=TRUE}
+data <- cbind(subtot, ytot, xtot)
+```
+
+## 2. Extracts only the measurements on the mean and standard deviation for each measurement
+
+To do so, we identify and extract the column that have either mean or std in their name
+
+```{r, eval=FALSE, include=TRUE}
+subdata <- data[, grepl("mean\\(\\)|std\\(\\)|subject|activity", names(data))]
+```
+
+## 3. Uses descriptive activity names to name the activities in the data set
+
+The 'activity' column is re-encoded as factors which labels are given by the 'acti' variables (loaded from the 'activity_labels.txt' file)
+
+```{r, eval=FALSE, include=TRUE}
+subdata$activity <- factor(x = subdata$activity, labels = acti$V2)
+```
+
+## 4. Appropriately labels the data set with descriptive variable names
+
+Acronyms are placed by full names
+
+```{r, eval=FALSE, include=TRUE}
+names(subdata) <- gsub("\\(\\)", "", names(subdata))
+names(subdata) <- gsub("^t", "time", names(subdata))
+names(subdata) <- gsub("^f", "frequency", names(subdata))
+names(subdata) <- gsub("Acc", "Accelerometer", names(subdata))
+names(subdata) <- gsub("Gyro", "Gyroscope", names(subdata))
+names(subdata) <- gsub("Mag", "Magnitude", names(subdata))
+names(subdata) <- gsub("BodyBody", "Body", names(subdata))
+
+names(subdata) <- make.names(names(subdata))
+```
+
+
+## 5. From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject
+
+We first re-encode the 'subject' variable as a factor
+
+```{r, eval=FALSE, include=TRUE}
+subdata$subject <- as.factor(subdata$subject)
+```
+
+The 'tidydata' set is then created by averaging for each 'activity' and 'subject'
+
+```{r, eval=FALSE, include=TRUE}
+tidydata <- ddply(subdata, c("subject","activity"), numcolwise(mean))
+
+write.table(tidydata, file = "tidydata.txt", row.name = FALSE)
+```
+
+## References
+[1] Davide Anguita, Alessandro Ghio, Luca Oneto, Xavier Parra and Jorge L. Reyes-Ortiz. Human Activity Recognition on Smartphones using a Multiclass Hardware-Friendly Support Vector Machine. International Workshop of Ambient Assisted Living (IWAAL 2012). Vitoria-Gasteiz, Spain. Dec 2012
+
